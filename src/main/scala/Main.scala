@@ -175,7 +175,7 @@ object Main extends App {
 	/* wait for all threads to finish and collect the results. we will only wait
 	 * at most TRIES * 100ms (note: flatten filters out all
 	 * None's) */
-	val results = awaitAll(100 * TRIES, tasks: _*).asInstanceOf[List[Option[Option[Config]]]].flatten
+	val results = awaitAll(500 * TRIES, tasks: _*).asInstanceOf[List[Option[Option[Config]]]].flatten
 	
 	val millis = Duration(System.nanoTime - startTime, NANOSECONDS).toMillis
     val avg = (results count (_.isDefined)) /  results.length.toFloat
