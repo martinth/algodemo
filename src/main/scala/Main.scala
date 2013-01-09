@@ -89,7 +89,7 @@ object CNFSolver {
   }
   
   def probKSatAlgo(formula: CNFFormula) = {
-    val rnd = new Random()    
+    val rnd = new Random(42)    
     
     /** tail recursive algorithm to find a solution **/
     def rec(config: collection.mutable.Map[String, Boolean], limit: Int):Option[Config] = {
@@ -140,7 +140,7 @@ object CNFGenerator {
     }
     
     // create m clauses where each clause selected k random variables
-    val rnd = new Random(System.currentTimeMillis())
+    val rnd = new Random(42)
     val clauses = for(i <- 1 to m) yield new Clause((for(j <- 1 to k) yield vars(rnd.nextInt(vars.length))): _*)
     
     new CNFFormula(clauses:_*)
