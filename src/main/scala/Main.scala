@@ -11,10 +11,13 @@ package object cnf {
 	    }
 	    result
 	}
+	
+	
+
 }
 
 import cnf.{Config, ClauseGenerator, time}
-import scala.util.{Random, DynamicVariable}
+import scala.util.{Random}
 import scala.collection.parallel.immutable.ParVector
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ListBuffer
@@ -24,6 +27,80 @@ import scala.math.{abs, ceil, floor}
 import util.control.Breaks._
 import scala.actors.remote.RemoteActor._
 import scala.actors.Actor
+
+
+	final class MersenneTwister (seed: Int = 5489) {
+  private val N = 624
+  private val M = 397
+ 
+  private val MatrixA = 0x9908b0dfL
+ 
+  private val UpperMask = 0x80000000L
+  private val LowerMask = 0x7fffffffL
+ 
+  private val mt = new Array[Long](N)
+  private var mti = N + 1
+ 
+  mt(0) = seed
+  for (i <- 1 until N) mt(i) = (1812433253L * (mt(i - 1) ^ (mt(i - 1) >>> 30)) + i) & 0xffffffffL
+ 
+  // Generates the next random integer in the sequence
+  def nextInt(): Int = {
+    var y = 0L
+ 
+    if (mti >= N) {
+      val mag01 = Array(0L, MatrixA)
+ 
+      var kk = 0
+      while (kk < N - M) {
+        y = (mt(kk) & UpperMask) | (mt(kk + 1) & LowerMask)
+        mt(kk) = mt(kk + M) ^ (y >>> 1) ^ mag01(y.toInt & 0x1)
+        kk += 1
+      }
+      while (kk < N - 1) {
+        y = (mt(kk) & UpperMask) | (mt(kk + 1) & LowerMask)
+        mt(kk) = mt(kk + (M - N)) ^ (y >>> 1) ^ mag01(y.toInt & 0x1)
+        kk += 1
+      }
+      y = (mt(N - 1) & UpperMask) | (mt(0) & LowerMask)
+      mt(N - 1) = mt(M - 1) ^ (y >>> 1) ^ mag01(y.toInt & 0x1)
+ 
+      mti = 0
+    }
+ 
+    y = mt(mti); mti += 1
+    y ^= y >>> 11
+    y ^= (y << 7) & 0x9d2c5680L
+    y ^= (y << 15) & 0xefc60000L
+    y ^= (y >>> 18)
+ 
+    y.toInt
+  }
+ 
+  // Generates a random integer in the interval [0, limit)
+  def nextInt(limit: Int): Int = {
+    // Find shift distance
+    val lim = limit.toLong & 0xffffffffL
+    var n = -1; var bit = 1L << 32
+    while (bit > lim) { n += 1; bit >>>= 1 }
+ 
+    // Generate integer, take most significant bits; reject while outside interval
+    var r = (nextInt().toLong & 0xffffffffL) >>> n
+    while (r >= lim) { r = (nextInt().toLong & 0xffffffffL) >>> n }
+    r.toInt
+  }
+ 
+  // Generates a random Double in the interval [0, 1)
+  def nextDouble(): Double = {
+    val a: Long = (nextInt().toLong & 0xffffffffL) >>> 5
+    val b: Long = (nextInt().toLong & 0xffffffffL) >>> 6
+    (a * 67108864.0 + b) / 9007199254740992.0
+  }
+  
+  def nextBoolean(): Boolean = {
+    (nextInt() % 2 == 0)
+  }
+}
 
 /** 
  * A boolean variable.
@@ -99,7 +176,7 @@ object CNFSolver {
   }
   
   def probKSatAlgo(formula: CNFFormula) = {
-    val rnd = new DynamicVariable(new Random(42))
+    val rnd = new MersenneTwister(42)
     
     /** tail recursive algorithm to find a solution **/
     def rec(config: collection.mutable.Map[String, Boolean], limit: Int):Option[Config] = {
@@ -118,7 +195,7 @@ object CNFSolver {
         // get all variables from an unsatisfied clause
         val vars = unsatClauses.apply(0).vars
         // choose one variable randomly invert it's configuration and go deeper
-        val varToMod = vars.apply(time("rnd", 10000000, rnd.value.nextInt(vars.length))).name
+        val varToMod = vars.apply(time("rnd", 10000000, rnd.nextInt(vars.length))).name
         config(varToMod) = !config(varToMod)
         rec(config, limit - 1)
       } 
@@ -129,7 +206,7 @@ object CNFSolver {
     }
     
     // create random configuration (a map from variable names to booleans)
-    val randomConfig = (formula.allVars map (v => (v, time("rnd", 10000000, rnd.value.nextBoolean))))
+    val randomConfig = (formula.allVars map (v => (v, time("rnd", 10000000, rnd.nextBoolean))))
     
     // pass this configuration to our internal helper function
     val mutableConfig = collection.mutable.Map(randomConfig: _*)
