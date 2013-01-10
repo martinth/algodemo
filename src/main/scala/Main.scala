@@ -5,7 +5,6 @@ package object cnf {
 
 import cnf.{Config, ClauseGenerator}
 import scala.collection.parallel.immutable.ParVector
-import scala.util.Random
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ListBuffer
 import scala.actors.Futures._
@@ -14,6 +13,7 @@ import scala.math.{abs, ceil, floor}
 import util.control.Breaks._
 import scala.actors.remote.RemoteActor._
 import scala.actors.Actor
+import java.util.concurrent.ThreadLocalRandom
 
 /** 
  * A boolean variable.
@@ -89,7 +89,7 @@ object CNFSolver {
   }
   
   def probKSatAlgo(formula: CNFFormula) = {
-    val rnd = new Random(42)    
+    val rnd = ThreadLocalRandom.current()
     
     /** tail recursive algorithm to find a solution **/
     def rec(config: collection.mutable.Map[String, Boolean], limit: Int):Option[Config] = {
@@ -140,7 +140,7 @@ object CNFGenerator {
     }
     
     // create m clauses where each clause selected k random variables
-    val rnd = new Random(42)
+    val rnd = ThreadLocalRandom.current()
     val clauses = for(i <- 1 to m) yield new Clause((for(j <- 1 to k) yield vars(rnd.nextInt(vars.length))): _*)
     
     new CNFFormula(clauses:_*)
