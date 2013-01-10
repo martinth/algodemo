@@ -1,9 +1,20 @@
 package object cnf {
 	type Config = Map[String, Boolean]
 	type ClauseGenerator = (Int, Int) => CNFFormula
+	
+	def time[R](desc: String, limit: Long, block: => R): R = {
+	    val t0 = System.nanoTime()
+	    val result = block    // call-by-name
+	    val dur = (System.nanoTime() - t0)
+	    if(dur > limit) {
+	    	println(desc + ": " + dur + "ns")
+	    }
+	    result
+	}
 }
 
-import cnf.{Config, ClauseGenerator}
+import cnf.{Config, ClauseGenerator, time}
+import scala.util.Random
 import scala.collection.parallel.immutable.ParVector
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ListBuffer
@@ -13,7 +24,6 @@ import scala.math.{abs, ceil, floor}
 import util.control.Breaks._
 import scala.actors.remote.RemoteActor._
 import scala.actors.Actor
-import java.util.concurrent.ThreadLocalRandom
 
 /** 
  * A boolean variable.
@@ -89,7 +99,7 @@ object CNFSolver {
   }
   
   def probKSatAlgo(formula: CNFFormula) = {
-    val rnd = ThreadLocalRandom.current()
+    val rnd = new Random(42)
     
     /** tail recursive algorithm to find a solution **/
     def rec(config: collection.mutable.Map[String, Boolean], limit: Int):Option[Config] = {
@@ -108,7 +118,7 @@ object CNFSolver {
         // get all variables from an unsatisfied clause
         val vars = unsatClauses.apply(0).vars
         // choose one variable randomly invert it's configuration and go deeper
-        val varToMod = vars.apply(rnd.nextInt(vars.length)).name
+        val varToMod = vars.apply(time("rnd", 10000000, rnd.nextInt(vars.length))).name
         config(varToMod) = !config(varToMod)
         rec(config, limit - 1)
       } 
@@ -119,7 +129,7 @@ object CNFSolver {
     }
     
     // create random configuration (a map from variable names to booleans)
-    val randomConfig = (formula.allVars map (v => (v, rnd.nextBoolean)))
+    val randomConfig = (formula.allVars map (v => (v, time("rnd", 10000000, rnd.nextBoolean))))
     
     // pass this configuration to our internal helper function
     val mutableConfig = collection.mutable.Map(randomConfig: _*)
@@ -140,7 +150,7 @@ object CNFGenerator {
     }
     
     // create m clauses where each clause selected k random variables
-    val rnd = ThreadLocalRandom.current()
+    val rnd = new Random(42)
     val clauses = for(i <- 1 to m) yield new Clause((for(j <- 1 to k) yield vars(rnd.nextInt(vars.length))): _*)
     
     new CNFFormula(clauses:_*)
