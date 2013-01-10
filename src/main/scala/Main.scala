@@ -21,12 +21,16 @@ import scala.util.{Random}
 import scala.collection.parallel.immutable.ParVector
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ListBuffer
-import scala.actors.Futures._
 import scala.concurrent.duration._
 import scala.math.{abs, ceil, floor}
 import util.control.Breaks._
-import scala.actors.remote.RemoteActor._
-import scala.actors.Actor
+import akka.actor._
+import akka.pattern._
+import akka.util.Timeout
+import akka.routing._
+import scala.actors.Futures
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Await, Future}
 
 
 	final class MersenneTwister (seed: Int = 5489) {
@@ -237,8 +241,25 @@ object CNFGenerator {
 /** helper to signal runtime exceeded **/
 case class ToMuchTimeException(avgDuration: Duration) extends Exception
 
+case class RandomRequest(n: Int, m: Int, clauseGenerator: ClauseGenerator)
+case class Reply(solutionExists: Boolean, duration: Duration)
+
+class RandomActor extends Actor {
+  def receive = {
+    case RandomRequest(n, m, clauseGenerator) => {
+       val startTime = System.nanoTime
+       val clause = clauseGenerator(m, n)
+       val solution = CNFSolver.probKSat(clause)
+       sender ! Reply(solution.isDefined, Duration(System.nanoTime - startTime, NANOSECONDS))
+    }
+  }
+}
+
 
 object Main extends App {
+  
+  val system = ActorSystem("MySystem")
+  val router = system.actorOf(Props[RandomActor].withRouter(RoundRobinRouter(nrOfInstances = Runtime.getRuntime().availableProcessors())))
   
   /**
    * Calculates the percentage of solvable clauses for a given n,m that are generated
@@ -251,25 +272,21 @@ object Main extends App {
     
     /** how man iteration to build the average **/
 	val TRIES = 100
-    
-    // do TRIES iterations in parallel 
-    val tasks = for (i <- 0 until TRIES) yield future[Option[Config]] {
-	    val clause = clauseGenerator(m, n)
-	    val solution = CNFSolver.probKSat(clause)
-	    solution
-	}
-	  
-	/* wait for all threads to finish and collect the results. we will only wait
-	 * at most TRIES * 100ms (note: flatten filters out all
-	 * None's) */
-	val results = awaitAll(500 * TRIES, tasks: _*).asInstanceOf[List[Option[Option[Config]]]].flatten
 	
-	val millis = Duration(System.nanoTime - startTime, NANOSECONDS).toMillis
-    val avg = (results count (_.isDefined)) /  results.length.toFloat
-    
-    println(s"n=$n, m=$m => $avg ($millis ms)")
+	implicit val timeout = Timeout(3*2*TRIES seconds)
 	
-	avg
+	val listOfFutures = List.fill(TRIES)(akka.pattern.ask(router, RandomRequest(n, m, clauseGenerator)).mapTo[Reply])
+
+	val futureOfList = Future.sequence(listOfFutures)
+	val res = Await.ready(futureOfList, 100 seconds)
+	println(res)
+
+//	val millis = Duration(System.nanoTime - startTime, NANOSECONDS).toMillis
+//    val avg = (results count (_.isDefined)) /  results.length.toFloat
+//    
+//    println(s"n=$n, m=$m => $avg ($millis ms)")
+//	
+//	avg
   }
   
 
