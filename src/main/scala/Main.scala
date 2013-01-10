@@ -14,7 +14,7 @@ package object cnf {
 }
 
 import cnf.{Config, ClauseGenerator, time}
-import scala.util.Random
+import scala.util.{Random, DynamicVariable}
 import scala.collection.parallel.immutable.ParVector
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.ListBuffer
@@ -99,7 +99,7 @@ object CNFSolver {
   }
   
   def probKSatAlgo(formula: CNFFormula) = {
-    val rnd = new Random(42)
+    val rnd = new DynamicVariable(new Random(42))
     
     /** tail recursive algorithm to find a solution **/
     def rec(config: collection.mutable.Map[String, Boolean], limit: Int):Option[Config] = {
@@ -118,7 +118,7 @@ object CNFSolver {
         // get all variables from an unsatisfied clause
         val vars = unsatClauses.apply(0).vars
         // choose one variable randomly invert it's configuration and go deeper
-        val varToMod = vars.apply(time("rnd", 10000000, rnd.nextInt(vars.length))).name
+        val varToMod = vars.apply(time("rnd", 10000000, rnd.value.nextInt(vars.length))).name
         config(varToMod) = !config(varToMod)
         rec(config, limit - 1)
       } 
@@ -129,7 +129,7 @@ object CNFSolver {
     }
     
     // create random configuration (a map from variable names to booleans)
-    val randomConfig = (formula.allVars map (v => (v, time("rnd", 10000000, rnd.nextBoolean))))
+    val randomConfig = (formula.allVars map (v => (v, time("rnd", 10000000, rnd.value.nextBoolean))))
     
     // pass this configuration to our internal helper function
     val mutableConfig = collection.mutable.Map(randomConfig: _*)
